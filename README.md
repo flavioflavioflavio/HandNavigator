@@ -3,8 +3,8 @@
 </p>
 
 <p align="center">
-  <strong>Navigate 3D viewports with your hands. No hardware needed.</strong><br/>
-  Open-source alternative to the 3Dconnexion SpaceMouse — powered by computer vision.
+  <strong>Navegue em viewports 3D com as mãos. Sem hardware adicional.</strong><br/>
+  Alternativa open-source ao 3Dconnexion SpaceMouse — powered by visão computacional.
 </p>
 
 <p align="center">
@@ -16,7 +16,261 @@
 
 ---
 
-## What is HandNavigator?
+## O que é o HandNavigator?
+
+HandNavigator transforma qualquer webcam padrão em um controlador de navegação 3D. Usando rastreamento de mão em tempo real, reconhece gestos naturais e os converte em movimentos de câmera — **Pan**, **Orbit** e **Zoom** — que funcionam dentro do Cinema 4D, Blender, Maya e praticamente qualquer aplicação 3D.
+
+Sem dongles. Sem drivers. Sem hardware especial. Apenas suas mãos e uma webcam.
+
+### Como funciona
+
+1. Abra o HandNavigator ao lado do seu app 3D
+2. A webcam rastreia sua mão usando machine learning (detecção de 21 pontos)
+3. Gestos são reconhecidos em tempo real e traduzidos em navegação de câmera
+4. A navegação é enviada ao seu app 3D via simulação de input nativa ou comunicação direta com o plugin
+
+### Referência de Gestos
+
+| Gesto                             | Ação      | Como                                |
+| --------------------------------- | --------- | ----------------------------------- |
+| Mão aberta + arrastar             | **Pan**   | Move a câmera lateralmente          |
+| Pinça (polegar+indicador) + mover | **Zoom**  | Zoom in/out                         |
+| Punho fechado + rotacionar        | **Orbit** | Rotaciona a câmera ao redor do alvo |
+| Mão parada / fora do quadro       | Idle      | Sem ação                            |
+
+---
+
+## Primeiros Passos
+
+### Opção A — Instalador (recomendado)
+
+Baixe `HandNavigator_Setup_1.0.0.exe` na página de [Releases](../../releases). O instalador:
+
+- Instala a aplicação desktop
+- Detecta automaticamente instalações do Cinema 4D (2020–2030)
+- Instala o plugin C4D em cada versão selecionada
+- Opcionalmente adiciona inicialização automática com o Windows
+
+### Opção B — A partir do código-fonte
+
+**Requisitos:** Python 3.11+, Windows 10/11, webcam.
+
+```bash
+git clone https://github.com/YOUR_USER/HandNavigator.git
+cd HandNavigator
+pip install -r requirements.txt
+python -m ui.app
+```
+
+O modelo de mão do MediaPipe (~25 MB) é baixado automaticamente na primeira execução.
+
+### Plugin Cinema 4D
+
+O instalador cuida disso automaticamente. Para instalação manual:
+
+1. Copie a pasta `c4d_plugin/HandNavigator/` para o diretório de plugins do C4D
+2. Ou vá em **Edit → Preferences → Plugins → Add Folder** e aponte para ela
+3. Reinicie o Cinema 4D
+4. Acesse via **Extensions → HandNavigator**
+
+O plugin inclui um dashboard com status em tempo real, sliders de sensibilidade para cada eixo e controles de conexão. Maxon Plugin ID oficial: `1067724`.
+
+### Aplicações Suportadas
+
+| Aplicação       | Modo de Input       | Status                                    |
+| --------------- | ------------------- | ----------------------------------------- |
+| Cinema 4D       | Plugin UDP (direto) | Totalmente testado, plugin nativo incluso |
+| Blender         | Win32 SendInput     | Pronto, perfil incluso                    |
+| Maya            | Win32 SendInput     | Compatível (mesmos atalhos do C4D)        |
+| Qualquer app 3D | Win32 SendInput     | Funciona via simulação de teclado/mouse   |
+
+### Internacionalização
+
+A UI detecta automaticamente o locale do seu SO e suporta:
+
+- English (padrão)
+- Português (Brasil)
+- Español
+
+---
+
+## Documentação Técnica
+
+> Esta seção é voltada para desenvolvedores que desejam entender, contribuir ou estender o HandNavigator.
+
+### Arquitetura
+
+```
+                         ┌─────────────────────────────────────┐
+                         │         HandNavigator Desktop       │
+                         │                                     │
+  Webcam ──► OpenCV ──►  │  MediaPipe Hand Landmarker (TFLite) │
+                         │           │                         │
+                         │  Gesture Recognizer (heurístico)    │
+                         │           │                         │
+                         │  Navigation Solver (engine de delta)│
+                         │           │                         │
+                         │    ┌──────┴───────┐                 │
+                         │    │              │                 │
+                         │  Win32        UDP Socket            │
+                         │  SendInput    (pacotes JSON)        │
+                         │    │              │                 │
+                         └────┼──────────────┼─────────────────┘
+                              │              │
+                              ▼              ▼
+                         Qualquer App   Plugin Cinema 4D
+                         3D (via OS)    (GeDialog nativo)
+```
+
+### Stack
+
+- **Linguagem:** Python 3.11
+- **Rastreamento de Mão:** Google MediaPipe Tasks API — modelo de 21 landmarks, backend TFLite, inferência CPU a 30+ FPS
+- **Visão Computacional:** OpenCV — captura de webcam, processamento de frames, conversão de espaço de cor
+- **Framework GUI:** PyQt6 — janela principal, system tray, overlay PIP de webcam, viewport OpenGL
+- **Renderização 3D:** PyOpenGL — modo Preview em tempo real com orbit/pan/zoom em grid de referência
+- **Simulação de Input:** Win32 `SendInput` via ctypes — injeção de mouse/teclado sem dependências
+- **Protocolo de Rede:** UDP sockets com payloads JSON — latência sub-ms para comunicação com plugin C4D
+- **Suavização:** Implementação do One-Euro Filter — filtro passa-baixa adaptativo que equilibra supressão de jitter com responsividade
+- **Integração C4D:** Cinema 4D Python API (módulo `c4d`) — plugin `CommandData`, UI `GeDialog`, servidor UDP em thread
+- **Build:** PyInstaller 6.18 (EXE standalone), Inno Setup 6 (instalador Windows)
+- **i18n:** Módulo de string-table customizado com detecção automática de locale (3 idiomas, 53 chaves)
+
+### Mapa de Módulos
+
+```
+HandNavigator/
+├── tracker/                  # Engine de rastreamento
+│   ├── config.py             # Parâmetros ajustáveis (sensibilidade, dead zones, etc.)
+│   ├── hand_detector.py      # Wrapper MediaPipe — lifecycle, extração de landmarks
+│   ├── gesture_recognizer.py # Classificador heurístico (IDLE/PAN/ZOOM/ORBIT) + debounce
+│   ├── navigation_solver.py  # Engine de cálculo de deltas — converte landmarks em deltas de câmera
+│   ├── smoothing.py          # Implementação do One-Euro Filter (passa-baixa adaptativo)
+│   └── main.py               # Orquestrador — loop de câmera, pipeline gesto→navegação
+│
+├── input/                    # Adaptadores de saída
+│   ├── input_simulator.py    # Dispatcher baseado em perfil (seleciona Win32 ou UDP)
+│   ├── win32_input.py        # Wrapper nativo SendInput (movimentos de mouse, botões, combos de tecla)
+│   ├── c4d_socket_client.py  # Cliente UDP — serializa comandos de navegação como JSON
+│   └── profiles/             # Mapeamentos de input por aplicação
+│       ├── base_profile.py   # Contrato abstrato do perfil
+│       ├── cinema4d.py       # Combos específicos C4D (Alt+MMB orbit, etc.)
+│       └── blender.py        # Combos específicos Blender (MMB orbit, Shift+MMB pan)
+│
+├── ui/                       # Camada de aplicação desktop
+│   ├── app.py                # Janela principal — troca de modo, barra de status, integração tray
+│   ├── tray_icon.py          # System tray — ícone reativo a gestos, menu de contexto
+│   ├── pip_widget.py         # Overlay PIP da webcam — frameless, arrastável, redimensionável
+│   ├── viewport_3d.py        # Viewport OpenGL para modo Preview
+│   ├── tracker_thread.py     # Wrapper QThread — roda loop de tracking fora da thread principal
+│   └── i18n.py               # Internacionalização — tabelas de strings, detecção de locale
+│
+├── c4d_plugin/               # Plugin nativo Cinema 4D
+│   └── HandNavigator/
+│       ├── HandNavigator.pyp # Entry do plugin — GeDialog, servidor UDP, comandos de navegação
+│       ├── LICENSE
+│       └── README.md
+│
+├── assets/                   # Ícones do app (PNG, ICO, SVG)
+├── models/                   # Modelo MediaPipe (auto-download, no gitignore)
+├── HandNavigator.spec        # Configuração de build PyInstaller
+├── installer.iss             # Script do instalador Inno Setup
+└── requirements.txt          # Dependências Python
+```
+
+### Reconhecimento de Gestos (Detalhe)
+
+O classificador de gestos em `gesture_recognizer.py` usa uma abordagem **heurística e determinística** — sem modelo ML secundário, sem dados de treinamento. A classificação é baseada em análise geométrica dos 21 landmarks do MediaPipe:
+
+- **Detecção de pinça:** distância Euclidiana entre a ponta do polegar (landmark 4) e a ponta do indicador (landmark 8), normalizada pela escala da mão
+- **Detecção de punho:** razão média de curvatura de todos os cinco dedos (distância ponta-MCP vs comprimento do dedo)
+- **Mão aberta:** todos os dedos estendidos além do limiar de curvatura
+- **Debounce:** um gesto deve persistir por `GESTURE_SWITCH_FRAMES` frames consecutivos antes de se tornar ativo, prevenindo alternância errática
+
+### Pipeline de Suavização
+
+Landmarks de mão brutos são inerentemente ruidosos. O HandNavigator aplica uma estratégia de **suavização em camadas duplas**:
+
+1. **Suavização de landmarks** (One-Euro Filter por landmark) — aplicada antes da classificação de gestos para estabilizar o sinal de entrada
+2. **Suavização de delta de navegação** — aplicada após o Navigation Solver para suavizar os comandos de saída
+3. **Dead zones** — limiares mínimos configuráveis (`DEAD_ZONE_TRANSLATION`, `DEAD_ZONE_ROTATION`) abaixo dos quais o movimento é ignorado completamente
+
+O One-Euro Filter é um filtro adaptativo que aumenta a suavização em baixas velocidades (reduzindo jitter) e a diminui em altas velocidades (preservando responsividade). Os parâmetros `min_cutoff` e `beta` são ajustados por caso de uso.
+
+### Protocolo do Plugin C4D
+
+O app desktop e o Cinema 4D se comunicam via UDP em `127.0.0.1:19700`. Pacotes são codificados em JSON com o seguinte schema:
+
+```json
+{
+  "type": "orbit",
+  "dx": 0.0023,
+  "dy": -0.0011
+}
+```
+
+Tipos de comando suportados: `orbit`, `pan`, `zoom`. O plugin aplica os deltas recebidos diretamente na matriz de transformação da câmera ativa usando a API Python do Cinema 4D.
+
+### Configuração
+
+Todos os parâmetros ajustáveis ficam em `tracker/config.py`:
+
+```python
+ACTIVE_PROFILE       = "cinema4d"   # Seleção de perfil
+PAN_SENSITIVITY      = 800          # Pixels de mouse por unidade de movimento da mão
+ZOOM_SENSITIVITY     = 1200         # Multiplicador de responsividade do zoom
+ORBIT_SENSITIVITY    = 600          # Multiplicador de responsividade do orbit
+DEAD_ZONE_TRANSLATION = 0.003      # Limiar mínimo de movimento
+DEAD_ZONE_ROTATION   = 0.004       # Limiar mínimo de rotação
+GESTURE_SWITCH_FRAMES = 3          # Frames necessários para confirmar mudança de gesto
+SHOW_DEBUG_WINDOW    = True         # Mostrar overlay de debug da webcam
+```
+
+### Build a partir do Código-Fonte
+
+**EXE standalone:**
+
+```bash
+pip install pyinstaller
+python -m PyInstaller HandNavigator.spec --noconfirm --clean
+# Output: dist/HandNavigator/HandNavigator.exe
+```
+
+**Instalador Windows** (requer [Inno Setup 6](https://jrsoftware.org/isinfo.php)):
+
+```bash
+# Primeiro faça o build do EXE, depois:
+iscc installer.iss
+# Output: installer_output/HandNavigator_Setup_1.0.0.exe
+```
+
+### Adicionando um Novo Perfil de Aplicação
+
+1. Crie `input/profiles/seu_app.py` implementando `BaseProfile`
+2. Defina os combos de tecla/mouse para orbit, pan e zoom
+3. Registre em `input/profiles/__init__.py`
+4. Defina `ACTIVE_PROFILE = "seu_app"` em `tracker/config.py`
+
+Veja `input/profiles/cinema4d.py` como implementação de referência.
+
+---
+
+## Autor
+
+**Flávio Takemoto** — [takemoto.com.br](http://www.takemoto.com.br)
+
+## Licença
+
+[MIT](LICENSE) — livre para uso pessoal e comercial.
+
+---
+
+## English
+
+<details>
+<summary><strong>Click to expand the English version</strong></summary>
+
+### What is HandNavigator?
 
 HandNavigator turns any standard webcam into a 3D navigation controller. Using real-time hand tracking, it recognizes natural gestures and converts them into camera movements — **Pan**, **Orbit**, and **Zoom** — that work inside Cinema 4D, Blender, Maya, and virtually any 3D application.
 
@@ -38,11 +292,9 @@ No dongles. No drivers. No special hardware. Just your hands and a webcam.
 | Closed fist + rotate       | **Orbit** | Rotate camera around target |
 | Hand still / out of frame  | Idle      | No action                   |
 
----
+### Getting Started
 
-## Getting Started
-
-### Option A — Installer (recommended)
+#### Option A — Installer (recommended)
 
 Download `HandNavigator_Setup_1.0.0.exe` from the [Releases](../../releases) page. The installer:
 
@@ -51,7 +303,7 @@ Download `HandNavigator_Setup_1.0.0.exe` from the [Releases](../../releases) pag
 - Installs the C4D plugin into each selected version
 - Optionally adds auto-start with Windows
 
-### Option B — From source
+#### Option B — From source
 
 **Requirements:** Python 3.11+, Windows 10/11, webcam.
 
@@ -84,181 +336,12 @@ The plugin includes a dashboard with real-time status, sensitivity sliders for e
 | Maya        | Win32 SendInput     | Compatible (shares C4D shortcuts)    |
 | Any 3D app  | Win32 SendInput     | Works via keyboard/mouse simulation  |
 
-### Internationalization
-
-The UI auto-detects your OS locale and supports:
-
-- English (default)
-- Português (Brasil)
-- Español
-
----
-
-## Technical Documentation
-
-> This section is aimed at developers who want to understand, contribute to, or extend HandNavigator.
-
-### Architecture
-
-```
-                         ┌─────────────────────────────────────┐
-                         │         HandNavigator Desktop       │
-                         │                                     │
-  Webcam ──► OpenCV ──►  │  MediaPipe Hand Landmarker (TFLite) │
-                         │           │                         │
-                         │  Gesture Recognizer (heuristic)     │
-                         │           │                         │
-                         │  Navigation Solver (delta engine)   │
-                         │           │                         │
-                         │    ┌──────┴───────┐                 │
-                         │    │              │                 │
-                         │  Win32        UDP Socket            │
-                         │  SendInput    (JSON packets)        │
-                         │    │              │                 │
-                         └────┼──────────────┼─────────────────┘
-                              │              │
-                              ▼              ▼
-                         Any 3D App    Cinema 4D Plugin
-                         (via OS)      (native GeDialog)
-```
-
-### Stack
-
-- **Language:** Python 3.11
-- **Hand Tracking:** Google MediaPipe Tasks API — 21-landmark hand model, TFLite backend, CPU inference at 30+ FPS
-- **Computer Vision:** OpenCV — webcam capture, frame processing, color space conversion
-- **GUI Framework:** PyQt6 — main window, system tray, PIP webcam overlay, OpenGL viewport
-- **3D Rendering:** PyOpenGL — real-time Preview mode with orbit/pan/zoom on a reference grid
-- **Input Simulation:** Win32 `SendInput` via ctypes — zero-dependency mouse/keyboard injection
-- **Network Protocol:** UDP sockets with JSON payloads — sub-ms latency for C4D plugin communication
-- **Smoothing:** One-Euro Filter implementation — adaptive low-pass filter that balances jitter suppression with responsiveness
-- **C4D Integration:** Cinema 4D Python API (`c4d` module) — `CommandData` plugin, `GeDialog` UI, threaded UDP server
-- **Build:** PyInstaller 6.18 (standalone EXE), Inno Setup 6 (Windows installer)
-- **i18n:** Custom string-table module with auto locale detection (3 languages, 53 keys)
-
-### Module Map
-
-```
-HandNavigator/
-├── tracker/                  # Core hand-tracking engine
-│   ├── config.py             # All tunable parameters (sensitivity, dead zones, etc.)
-│   ├── hand_detector.py      # MediaPipe wrapper — lifecycle, landmark extraction
-│   ├── gesture_recognizer.py # Heuristic classifier (IDLE/PAN/ZOOM/ORBIT) + debounce
-│   ├── navigation_solver.py  # Delta computation engine — converts landmarks to camera deltas
-│   ├── smoothing.py          # One-Euro Filter implementation (adaptive low-pass)
-│   └── main.py               # Orchestrator — camera loop, gesture→navigation pipeline
-│
-├── input/                    # Output adapters
-│   ├── input_simulator.py    # Profile-based dispatcher (selects Win32 or UDP)
-│   ├── win32_input.py        # Native SendInput wrapper (mouse moves, button presses, key combos)
-│   ├── c4d_socket_client.py  # UDP client — serializes navigation commands as JSON
-│   └── profiles/             # Per-application input mappings
-│       ├── base_profile.py   # Abstract profile contract
-│       ├── cinema4d.py       # C4D-specific key combos (Alt+MMB orbit, etc.)
-│       └── blender.py        # Blender-specific key combos (MMB orbit, Shift+MMB pan)
-│
-├── ui/                       # Desktop application layer
-│   ├── app.py                # Main window — mode switching, status bar, tray integration
-│   ├── tray_icon.py          # System tray — gesture-reactive icon, context menu
-│   ├── pip_widget.py         # PIP webcam overlay — frameless, draggable, resizable
-│   ├── viewport_3d.py        # OpenGL 3D viewport for Preview mode
-│   ├── tracker_thread.py     # QThread wrapper — runs tracking loop off main thread
-│   └── i18n.py               # Internationalization — string tables, locale detection
-│
-├── c4d_plugin/               # Cinema 4D native plugin
-│   └── HandNavigator/
-│       ├── HandNavigator.pyp # Plugin entry — GeDialog, UDP server, navigation commands
-│       ├── LICENSE
-│       └── README.md
-│
-├── assets/                   # App icons (PNG, ICO, SVG)
-├── models/                   # MediaPipe model (auto-downloaded, gitignored)
-├── HandNavigator.spec        # PyInstaller build configuration
-├── installer.iss             # Inno Setup installer script
-└── requirements.txt          # Python dependencies
-```
-
-### Gesture Recognition (Detail)
-
-The gesture classifier in `gesture_recognizer.py` uses a **heuristic, deterministic approach** — no secondary ML model, no training data needed. Classification is based on geometric analysis of the 21 MediaPipe landmarks:
-
-- **Pinch detection:** Euclidean distance between thumb tip (landmark 4) and index tip (landmark 8), normalized against hand scale
-- **Fist detection:** Average curl ratio of all five fingers (tip-to-MCP distance vs finger length)
-- **Open hand:** All fingers extended beyond curl threshold
-- **Debounce:** A gesture must persist for `GESTURE_SWITCH_FRAMES` consecutive frames before becoming active, preventing erratic switching
-
-### Smoothing Pipeline
-
-Raw hand landmarks are inherently noisy. HandNavigator applies a **dual-layer smoothing** strategy:
-
-1. **Landmark smoothing** (One-Euro Filter per landmark) — applied before gesture classification to stabilize the input signal
-2. **Navigation delta smoothing** — applied after the Navigation Solver to smooth the output commands
-3. **Dead zones** — configurable minimum thresholds (`DEAD_ZONE_TRANSLATION`, `DEAD_ZONE_ROTATION`) below which movement is ignored entirely
-
-The One-Euro Filter is an adaptive filter that increases smoothing at low speeds (reducing jitter) and decreases it at high speeds (preserving responsiveness). Parameters `min_cutoff` and `beta` are tuned per use case.
-
-### C4D Plugin Protocol
-
-The desktop app and Cinema 4D communicate via UDP on `127.0.0.1:19700`. Packets are JSON-encoded with the following schema:
-
-```json
-{
-  "type": "orbit",
-  "dx": 0.0023,
-  "dy": -0.0011
-}
-```
-
-Supported command types: `orbit`, `pan`, `zoom`. The plugin applies received deltas directly to the active camera's transformation matrix using the Cinema 4D Python API.
-
-### Configuration
-
-All tunable parameters live in `tracker/config.py`:
-
-```python
-ACTIVE_PROFILE       = "cinema4d"   # Profile selection
-PAN_SENSITIVITY      = 800          # Mouse pixels per unit of hand movement
-ZOOM_SENSITIVITY     = 1200         # Zoom responsiveness multiplier
-ORBIT_SENSITIVITY    = 600          # Orbit responsiveness multiplier
-DEAD_ZONE_TRANSLATION = 0.003      # Minimum movement threshold
-DEAD_ZONE_ROTATION   = 0.004       # Minimum rotation threshold
-GESTURE_SWITCH_FRAMES = 3          # Frames needed to confirm gesture change
-SHOW_DEBUG_WINDOW    = True         # Show webcam debug overlay
-```
-
-### Building from Source
-
-**Standalone EXE:**
-
-```bash
-pip install pyinstaller
-python -m PyInstaller HandNavigator.spec --noconfirm --clean
-# Output: dist/HandNavigator/HandNavigator.exe
-```
-
-**Windows Installer** (requires [Inno Setup 6](https://jrsoftware.org/isinfo.php)):
-
-```bash
-# First build the EXE, then:
-iscc installer.iss
-# Output: installer_output/HandNavigator_Setup_1.0.0.exe
-```
-
-### Adding a New Application Profile
-
-1. Create `input/profiles/your_app.py` implementing `BaseProfile`
-2. Define the key/mouse combos for orbit, pan, and zoom
-3. Register it in `input/profiles/__init__.py`
-4. Set `ACTIVE_PROFILE = "your_app"` in `tracker/config.py`
-
-See `input/profiles/cinema4d.py` for a reference implementation.
-
----
-
-## Author
+### Author
 
 **Flávio Takemoto** — [takemoto.com.br](http://www.takemoto.com.br)
 
-## License
+### License
 
 [MIT](LICENSE) — free for personal and commercial use.
+
+</details>
