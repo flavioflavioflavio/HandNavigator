@@ -31,12 +31,12 @@ Sem dongles. Sem drivers. Sem hardware especial. Apenas suas mãos e uma webcam.
 
 ### Referência de Gestos
 
-| Gesto                             | Ação      | Como                                |
-| --------------------------------- | --------- | ----------------------------------- |
-| Mão aberta + arrastar             | **Pan**   | Move a câmera lateralmente          |
-| Pinça (polegar+indicador) + mover | **Zoom**  | Zoom in/out                         |
-| Punho fechado + rotacionar        | **Orbit** | Rotaciona a câmera ao redor do alvo |
-| Mão parada / fora do quadro       | Idle      | Sem ação                            |
+| Gesto                          | Ação      | Como                                |
+| ------------------------------ | --------- | ----------------------------------- |
+| Polegar + Indicador (pinça)    | **Pan**   | Move a câmera lateralmente          |
+| Polegar + Médio (pinça)        | **Orbit** | Rotaciona a câmera ao redor do alvo |
+| Polegar + Anelar (pinça)       | **Zoom**  | Zoom in/out                         |
+| Sem pinça / mão fora do quadro | Idle      | Sem ação                            |
 
 ---
 
@@ -180,12 +180,14 @@ HandNavigator/
 
 ### Reconhecimento de Gestos (Detalhe)
 
-O classificador de gestos em `gesture_recognizer.py` usa uma abordagem **heurística e determinística** — sem modelo ML secundário, sem dados de treinamento. A classificação é baseada em análise geométrica dos 21 landmarks do MediaPipe:
+O classificador de gestos em `gesture_recognizer.py` usa uma abordagem **heurística e determinística** — sem modelo ML secundário, sem dados de treinamento. A classificação é baseada em análise geométrica dos 21 landmarks do MediaPipe usando um **modelo three-pinch**:
 
-- **Detecção de pinça:** distância Euclidiana entre a ponta do polegar (landmark 4) e a ponta do indicador (landmark 8), normalizada pela escala da mão
-- **Detecção de punho:** razão média de curvatura de todos os cinco dedos (distância ponta-MCP vs comprimento do dedo)
-- **Mão aberta:** todos os dedos estendidos além do limiar de curvatura
+- **Polegar + Indicador** (landmarks 4 e 8): distância Euclidiana abaixo de `PINCH_THRESHOLD` → **PAN**
+- **Polegar + Médio** (landmarks 4 e 12): mesma lógica → **ORBIT**
+- **Polegar + Anelar** (landmarks 4 e 16): mesma lógica → **ZOOM**
+- A checagem é feita em ordem (index → middle → ring), primeiro match vence
 - **Debounce:** um gesto deve persistir por `GESTURE_SWITCH_FRAMES` frames consecutivos antes de se tornar ativo, prevenindo alternância errática
+- Funções auxiliares (`_is_finger_extended`, `_is_palm_facing_camera`, `_is_victory_shape`, `_is_l_shape`) existem para gestos futuros
 
 ### Pipeline de Suavização
 
@@ -285,12 +287,12 @@ No dongles. No drivers. No special hardware. Just your hands and a webcam.
 
 ### Gesture Reference
 
-| Gesture                    | Action    | How                         |
-| -------------------------- | --------- | --------------------------- |
-| Open hand + drag           | **Pan**   | Move camera laterally       |
-| Pinch (thumb+index) + move | **Zoom**  | Zoom in/out                 |
-| Closed fist + rotate       | **Orbit** | Rotate camera around target |
-| Hand still / out of frame  | Idle      | No action                   |
+| Gesture                       | Action    | How                         |
+| ----------------------------- | --------- | --------------------------- |
+| Thumb + Index finger (pinch)  | **Pan**   | Move camera laterally       |
+| Thumb + Middle finger (pinch) | **Orbit** | Rotate camera around target |
+| Thumb + Ring finger (pinch)   | **Zoom**  | Zoom in/out                 |
+| No pinch / hand out of frame  | Idle      | No action                   |
 
 ### Getting Started
 
