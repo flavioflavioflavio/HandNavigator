@@ -51,12 +51,20 @@ Baixe `HandNavigator_Setup_1.0.0.exe` na página de [Releases](../../releases). 
 - Instala o plugin C4D em cada versão selecionada
 - Opcionalmente adiciona inicialização automática com o Windows
 
-### Opção B — A partir do código-fonte
+### Opção B — Portátil (sem instalação)
+
+Baixe `HandNavigator_v1.0.0_Portable.zip` na página de [Releases](../../releases).
+
+1. Extraia o ZIP em qualquer pasta
+2. Execute `HandNavigator.exe`
+3. Para o plugin C4D: copie a pasta `c4d_plugin/HandNavigator/` para dentro da pasta `plugins/` do seu Cinema 4D, ou vá em **Edit → Preferences → Plugins → Add Folder** e aponte para ela. Reinicie o C4D.
+
+### Opção C — A partir do código-fonte
 
 **Requisitos:** Python 3.11+, Windows 10/11, webcam.
 
 ```bash
-git clone https://github.com/YOUR_USER/HandNavigator.git
+git clone https://github.com/flavioflavioflavio/HandNavigator.git
 cd HandNavigator
 pip install -r requirements.txt
 python -m ui.app
@@ -305,12 +313,20 @@ Download `HandNavigator_Setup_1.0.0.exe` from the [Releases](../../releases) pag
 - Installs the C4D plugin into each selected version
 - Optionally adds auto-start with Windows
 
-#### Option B — From source
+#### Option B — Portable (no installation)
+
+Download `HandNavigator_v1.0.0_Portable.zip` from the [Releases](../../releases) page.
+
+1. Extract the ZIP to any folder
+2. Run `HandNavigator.exe`
+3. For the C4D plugin: copy the `c4d_plugin/HandNavigator/` folder into your Cinema 4D `plugins/` directory, or go to **Edit → Preferences → Plugins → Add Folder** and point to it. Restart C4D.
+
+#### Option C — From source
 
 **Requirements:** Python 3.11+, Windows 10/11, webcam.
 
 ```bash
-git clone https://github.com/YOUR_USER/HandNavigator.git
+git clone https://github.com/flavioflavioflavio/HandNavigator.git
 cd HandNavigator
 pip install -r requirements.txt
 python -m ui.app
