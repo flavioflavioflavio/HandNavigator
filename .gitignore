@@ -11,6 +11,9 @@ build/
 dist/
 *.spec.bak
 
+# ─── Inno Setup ────────────────────────────────────────
+installer_output/
+
 # ─── Legacy / Dev-only ─────────────────────────────────
 _legacy/
 
