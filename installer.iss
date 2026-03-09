@@ -97,14 +97,16 @@ var
 
 procedure DetectCinema4D;
 var
-  BasePath: string;
+  BasePath, LocalPath: string;
   I, Year: Integer;
   FullPath: string;
+  Found: Boolean;
 begin
   C4DCount := 0;
-  BasePath := ExpandConstant('{commonpf}');
+  BasePath := ExpandConstant('{commonpf64}');
+  LocalPath := ExpandConstant('{localappdata}');
 
-  { Scan for Cinema 4D versions 2020-2030 }
+  { Scan for Cinema 4D versions 2020-2030 in Program Files }
   for Year := 2020 to 2030 do
   begin
     FullPath := BasePath + '\Maxon Cinema 4D ' + IntToStr(Year);
@@ -118,32 +120,54 @@ begin
     end;
   end;
 
-  { Also check Maxon root folder for nested installs }
-  FullPath := BasePath + '\Maxon';
-  if DirExists(FullPath) then
+  { Also check Maxon subfolder: Program Files\Maxon\Cinema 4D YYYY }
+  for Year := 2020 to 2030 do
   begin
-    { Check for Cinema 4D subfolder inside Maxon }
-    for Year := 2020 to 2030 do
+    FullPath := BasePath + '\Maxon\Cinema 4D ' + IntToStr(Year);
+    if DirExists(FullPath) then
     begin
-      FullPath := BasePath + '\Maxon\Cinema 4D ' + IntToStr(Year);
-      if DirExists(FullPath) then
+      Found := False;
+      for I := 0 to C4DCount - 1 do
       begin
-        { Avoid duplicates }
-        I := 0;
-        while I < C4DCount do
+        if C4DPaths[I] = FullPath then
         begin
-          if C4DPaths[I] = FullPath then
-            Break;
-          I := I + 1;
+          Found := True;
+          Break;
         end;
-        if I = C4DCount then
+      end;
+      if not Found then
+      begin
+        SetArrayLength(C4DPaths, C4DCount + 1);
+        SetArrayLength(C4DNames, C4DCount + 1);
+        C4DPaths[C4DCount] := FullPath;
+        C4DNames[C4DCount] := 'Cinema 4D ' + IntToStr(Year);
+        C4DCount := C4DCount + 1;
+      end;
+    end;
+  end;
+
+  { Also check %LOCALAPPDATA%\Maxon\Cinema 4D YYYY (newer versions) }
+  for Year := 2020 to 2030 do
+  begin
+    FullPath := LocalPath + '\Maxon\Cinema 4D ' + IntToStr(Year);
+    if DirExists(FullPath) then
+    begin
+      Found := False;
+      for I := 0 to C4DCount - 1 do
+      begin
+        if C4DPaths[I] = FullPath then
         begin
-          SetArrayLength(C4DPaths, C4DCount + 1);
-          SetArrayLength(C4DNames, C4DCount + 1);
-          C4DPaths[C4DCount] := FullPath;
-          C4DNames[C4DCount] := 'Cinema 4D ' + IntToStr(Year);
-          C4DCount := C4DCount + 1;
+          Found := True;
+          Break;
         end;
+      end;
+      if not Found then
+      begin
+        SetArrayLength(C4DPaths, C4DCount + 1);
+        SetArrayLength(C4DNames, C4DCount + 1);
+        C4DPaths[C4DCount] := FullPath;
+        C4DNames[C4DCount] := 'Cinema 4D ' + IntToStr(Year) + ' (user data)';
+        C4DCount := C4DCount + 1;
       end;
     end;
   end;
@@ -250,7 +274,7 @@ var
 begin
   if CurUninstallStep = usUninstall then
   begin
-    BasePath := ExpandConstant('{commonpf}');
+    BasePath := ExpandConstant('{commonpf64}');
     for Year := 2020 to 2030 do
     begin
       PluginPath := BasePath + '\Maxon Cinema 4D ' + IntToStr(Year) + '\plugins\HandNavigator';
@@ -258,6 +282,10 @@ begin
         DelTree(PluginPath, True, True, True);
 
       PluginPath := BasePath + '\Maxon\Cinema 4D ' + IntToStr(Year) + '\plugins\HandNavigator';
+      if DirExists(PluginPath) then
+        DelTree(PluginPath, True, True, True);
+
+      PluginPath := ExpandConstant('{localappdata}') + '\Maxon\Cinema 4D ' + IntToStr(Year) + '\plugins\HandNavigator';
       if DirExists(PluginPath) then
         DelTree(PluginPath, True, True, True);
     end;
