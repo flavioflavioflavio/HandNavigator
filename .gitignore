@@ -1,0 +1,30 @@
+# ─── Python ────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+*.egg
+*.pyo
+
+# ─── PyInstaller ───────────────────────────────────────
+build/
+dist/
+*.spec.bak
+
+# ─── Legacy / Dev-only ─────────────────────────────────
+_legacy/
+
+# ─── Models (auto-downloaded at runtime, ~25MB) ───────
+models/hand_landmarker.task
+
+# ─── OS ────────────────────────────────────────────────
+Thumbs.db
+Desktop.ini
+.DS_Store
+
+# ─── IDE ───────────────────────────────────────────────
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
